@@ -7,11 +7,13 @@ import 'dart:convert';
 class MapScreen extends StatefulWidget {
   final List<Map<String, dynamic>> favorites;
   final Function(List<Map<String, dynamic>>) onFavoritesChanged;
+  final Map<String, dynamic>? selectedFavPlace;
 
   const MapScreen({
     super.key,
     required this.favorites,
     required this.onFavoritesChanged,
+    this.selectedFavPlace,
   });
 
   @override
@@ -45,7 +47,18 @@ class _MapScreenState extends State<MapScreen> {
   void initState() {
     super.initState();
     _updateMarkers();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (widget.selectedFavPlace != null) {
+        _focusOnFavorite(widget.selectedFavPlace!);
+      }
+    });
   }
+
+  void _focusOnFavorite(Map<String, dynamic> place) {
+    _controller.animateCamera( 
+      CameraUpdate.newLatLngZoom(LatLng(place['lat'], place['lng']), 15),
+    );
+  } 
 
   void _updateMarkers() {
     markers = widget.favorites.map((place) => Marker(
@@ -98,11 +111,9 @@ class _MapScreenState extends State<MapScreen> {
     });
 
     try {
-      print('Searching: $input near $lat,$lng');  // Debug
       final response = await http.get(url);
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body) as Map<String, dynamic>;
-        print('✅ ${data['status']}: ${_suggestions.length} results');  // Debug
         if (data['status'] == 'OK') {
           final preds = data['predictions'] as List<dynamic>;
           setState(() {
@@ -111,13 +122,9 @@ class _MapScreenState extends State<MapScreen> {
               description: p['description'] as String,
             )).toList();
           });
-        } else {
-          print('❌ HTTP ${response.statusCode}');
-        }
+        } 
       }
     } catch (e) {
-      print('💥Error: $e');
-    } finally {
       setState(() => _isSearching = false);
     }
   }
@@ -174,7 +181,101 @@ Future<void> _goToPlace(String placeId) async {
     }
   }
 
-@override
+  Future<void> _addMapPositionToFavorites(LatLng position) async {
+    // 1. Get address from lat/lng (reverse geocoding)
+    final url = Uri.https('maps.googleapis.com', '/maps/api/geocode/json', {
+      'latlng': '${position.latitude},${position.longitude}',
+      'key': _googleApiKey,
+    });
+
+    String autoName = 'Unnamed place';
+    try {
+      final response = await http.get(url);
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body) as Map<String, dynamic>;
+        if (data['status'] == 'OK' && data['results'].isNotEmpty) {
+          autoName = data['results'][0]['formatted_address'] as String;
+        }
+      }
+    } catch (e) {
+      print('Geocode failed: $e');
+    }
+
+    // 2. Show dialog with auto-filled name
+    final nameController = TextEditingController(text: autoName);
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Add to favorites'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Text('Location: $autoName', style: const TextStyle(fontWeight: FontWeight.bold)),  // 👈 "Location"
+            const SizedBox(height: 12),
+            TextField(
+              controller: nameController,
+              decoration: InputDecoration(
+                labelText: 'Custom name (optional)',  // 👈 Changed label
+                hintText: 'Home, Office, Park... (leave empty to use address)',  // 👈 Clearer hint
+                border: OutlineInputBorder(),
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'Address: $autoName',  // 👈 Confirm address saved
+              style: TextStyle(fontSize: 12, color: Colors.green[600], fontStyle: FontStyle.italic),
+            ),
+            const SizedBox(height: 8),
+            Text('Lat: ${position.latitude.toStringAsFixed(4)}', style: TextStyle(fontSize: 12, color: Colors.grey[600])),
+            Text('Lng: ${position.longitude.toStringAsFixed(4)}', style: TextStyle(fontSize: 12, color: Colors.grey[600])),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              final customName = nameController.text.trim();
+              // 👈 ALWAYS SAVE - even if empty!
+              final finalName = customName.isNotEmpty ? customName : autoName.split(',')[0];  // 👈 Only require custom name
+                final newFavorite = {
+                  'id': DateTime.now().millisecondsSinceEpoch.toString(),
+                  'name': finalName,       // 👈 Custom name
+                  'address': autoName,      // 👈 Real address (always saved)
+                  'lat': position.latitude,
+                  'lng': position.longitude,
+                };
+                final updated = [...widget.favorites, newFavorite];
+                widget.onFavoritesChanged(updated);
+                _updateMarkers();
+                Navigator.pop(context);
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(content: Text('$finalName saved to favorites!')),
+                );
+              },
+            child: const Text('Save'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  @override
+  void didUpdateWidget(MapScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.favorites != widget.favorites || 
+        oldWidget.selectedFavPlace != widget.selectedFavPlace) {  // 👈 ALSO CHECK PLACE
+      _updateMarkers();
+      if (widget.selectedFavPlace != null) {
+        _focusOnFavorite(widget.selectedFavPlace!);
+      }
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
     return Column(
       children: [
@@ -256,17 +357,10 @@ Future<void> _goToPlace(String placeId) async {
             onMapCreated: (controller) => _controller = controller,
             myLocationEnabled: true,
             myLocationButtonEnabled: true,
+            onLongPress: _addMapPositionToFavorites,
           ),
         ),
       ],
     );
-  }
-
-  @override
-  void didUpdateWidget(MapScreen oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    if (oldWidget.favorites != widget.favorites) {
-      _updateMarkers();
-    }
   }
 }

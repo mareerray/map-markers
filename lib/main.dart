@@ -43,6 +43,7 @@ class MainTabs extends StatefulWidget {
 class _MainTabsState extends State<MainTabs> with TickerProviderStateMixin {
   late TabController _tabController;
   List<FavoritePlace> favorites = [];  // Shared favorites
+  Map<String, dynamic>? _selectedFavPlace;
 
   @override
   void initState() {
@@ -97,16 +98,28 @@ class _MainTabsState extends State<MainTabs> with TickerProviderStateMixin {
         children: [
           MapScreen( 
             favorites: favorites.map((place) => place.toJson()).toList(), // Pass as JSON
-            onFavoritesChanged: (List<Map<String, dynamic>> updatedFavorites) {
-              final favoritesList = updatedFavorites.map((json) => FavoritePlace.fromJson(json)).toList();
+            onFavoritesChanged: (updated) {
+              final favoritesList = updated.map((json) => FavoritePlace.fromJson(json)).toList();
+              setState(() {  
+                favorites = favoritesList;  // Update state variable
+              });
               _saveFavorites(favoritesList);
             },
+            selectedFavPlace: _selectedFavPlace,
           ),
           FavoritesScreen(
             favorites: favorites.map((place) => place.toJson()).toList(), 
             onFavoritesChanged: (List<Map<String, dynamic>> updatedFavorites) {
               final favoritesList = updatedFavorites.map((json) => FavoritePlace.fromJson(json)).toList();
+              setState(() { 
+                favorites = favoritesList;  // Update state variable
+              });
               _saveFavorites(favoritesList);
+            },
+            onPlaceTap: (Map<String, dynamic> favoritePlace) {
+              setState(() => _selectedFavPlace = favoritePlace);
+              _tabController.animateTo(0); // Switch to Map tab
+              // Optionally, you could implement functionality to jump to this location on the map
             },
           ),
           const InfoScreen(),
