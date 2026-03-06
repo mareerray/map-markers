@@ -4,6 +4,7 @@ import 'package:geolocator/geolocator.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/gestures.dart';
 import 'package:http/http.dart' as http;
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'dart:convert';
 import 'dart:async';
 
@@ -29,7 +30,10 @@ class _PlaceSuggestion {
   final String placeId;
   final String description; 
 
-  _PlaceSuggestion({required this.placeId, required this.description});
+  const _PlaceSuggestion({
+    required this.placeId, 
+    required this.description
+  });
 }
 
 class _MapScreenState extends State<MapScreen> {
@@ -40,33 +44,39 @@ class _MapScreenState extends State<MapScreen> {
   bool _isSearching = false;
   Position? currentPosition;
   Timer? _debounceTimer;
+  String apiKey = '';
 
   static const CameraPosition _kGooglePlex = CameraPosition(
     target: LatLng(60.0971, 19.9340),
     zoom: 12.0, // 👈 Change: 12=overview, 15=city, 18=street, 20=building
   );
 
-  // ✨✨✨✨🔑 Replace later 🔑✨✨✨✨✨
-  static const String _googleApiKey = 'my_api_key';
-
   @override
   void initState() {
     super.initState();
-    _updateMarkers();
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (widget.selectedFavPlace != null) {
-        _focusOnFavorite(widget.selectedFavPlace!);
-      }
-    });
+    apiKey = dotenv.env['GOOGLE_MAP_API_KEY'] ?? '';
+    _initializeMap();
   }
 
+  Future<void> _initializeMap() async {
+    await _updateMarkers(); // Load markers first
+    // ONE callback does it all - after screen is drawn
+    if(mounted) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (widget.selectedFavPlace != null) {
+          _focusOnFavorite(widget.selectedFavPlace!);
+        }
+      });
+    }
+  } 
+  
   void _focusOnFavorite(Map<String, dynamic> place) {
     _controller.animateCamera( 
       CameraUpdate.newLatLngZoom(LatLng(place['lat'], place['lng']), 16),
     );
   } 
 
-  void _updateMarkers() {
+  Future<void> _updateMarkers() async {
       final defaultIcon = BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueRose);
     markers = widget.favorites.map((place) => Marker(
       markerId: MarkerId(place['id']),
@@ -77,7 +87,7 @@ class _MapScreenState extends State<MapScreen> {
         onTap: () => _showPlaceDialog(place),
       ),
     )).toSet();
-    setState(() {});
+    if (mounted) setState(() {});
   }
 
   void _showPlaceDialog(Map<String, dynamic> place) {
@@ -122,7 +132,7 @@ class _MapScreenState extends State<MapScreen> {
 
     final url = Uri.https('maps.googleapis.com', '/maps/api/place/autocomplete/json', {
       'input': query,
-      'key': _googleApiKey,
+      'key': apiKey,
       'language': 'en',
     });
 
@@ -151,7 +161,7 @@ class _MapScreenState extends State<MapScreen> {
   Future<void> _goToPlace(String placeId) async {
     final url = Uri.https('maps.googleapis.com', '/maps/api/place/details/json', {
       'place_id': placeId,
-      'key': _googleApiKey,
+      'key': apiKey,
       'fields': 'geometry/location',
     });
 
@@ -172,16 +182,17 @@ class _MapScreenState extends State<MapScreen> {
         }
       }
     } catch (e) {
-      print('💥Error: $e');
+      //print('💥Error: $e');
     }
   }
 
-  Future<void> _goToCurrentLocation() async {
+  Future<void> _goToCurrentLocation(BuildContext context) async {
     bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
     if (!serviceEnabled) {
-      ScaffoldMessenger.of(context).showSnackBar(
+      if (!context.mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Location services disabled')),
-      );
+        );
       return;
     }
 
@@ -204,7 +215,7 @@ class _MapScreenState extends State<MapScreen> {
     // 1. Get address from lat/lng (reverse geocoding)
     final url = Uri.https('maps.googleapis.com', '/maps/api/geocode/json', {
       'latlng': '${position.latitude},${position.longitude}',
-      'key': _googleApiKey,
+      'key': apiKey,
     });
 
     String autoName = 'Unnamed place';
@@ -217,15 +228,16 @@ class _MapScreenState extends State<MapScreen> {
         }
       }
     } catch (e) {
-      print('Geocode failed: $e');
+      //print('Geocode failed: $e');
     }
 
     // 2. Show dialog with auto-filled name
     final nameController = TextEditingController(text: autoName);
 
+    if (!context.mounted) return; 
     showDialog(
       context: context,
-      builder: (context) => AlertDialog(
+      builder: (BuildContext dialogContext) => AlertDialog(
         title: const Text('Add to favorites'),
         content: Column(
           mainAxisSize: MainAxisSize.min,
@@ -258,7 +270,7 @@ class _MapScreenState extends State<MapScreen> {
         ),
         actions: [
           TextButton(
-            onPressed: () => Navigator.pop(context),
+            onPressed: () => Navigator.pop(dialogContext),
             child: const Text('Cancel'),
           ),
           ElevatedButton(
@@ -276,7 +288,8 @@ class _MapScreenState extends State<MapScreen> {
                 final updated = [...widget.favorites, newFavoriteJson];
                 widget.onFavoritesChanged(updated);  // Triggers parent's _saveFavorites    
                 _updateMarkers();
-                Navigator.pop(context);
+                Navigator.pop(dialogContext);
+                if (!context.mounted) return;
                 ScaffoldMessenger.of(context).showSnackBar(
                   SnackBar(content: Text('$finalName saved to favorites!'),
                   duration: Duration(seconds: 2),
@@ -314,6 +327,7 @@ class _MapScreenState extends State<MapScreen> {
     super.dispose();
   }
 
+  // --------------------------- BUILD UI ---------------------------
   @override
   Widget build(BuildContext context) {
     return Column(
@@ -356,8 +370,7 @@ class _MapScreenState extends State<MapScreen> {
                                 : null),
                       ),
                       onChanged: (String value) {
-                        _debounceTimer?.cancel();  // Cancel previous timer if typing continues
-                        
+                        _debounceTimer?.cancel();        
                         _debounceTimer = Timer(const Duration(milliseconds: 300), () {
                           _fetchSuggestions(value);  // Call search after 300ms pause
                         });
@@ -368,7 +381,7 @@ class _MapScreenState extends State<MapScreen> {
                   FloatingActionButton(
                     heroTag: 'location',
                     mini: true,
-                    onPressed: _goToCurrentLocation,
+                    onPressed: () => _goToCurrentLocation(context),
                     child: const Icon(Icons.my_location),
                   ),
                 ],
@@ -407,9 +420,9 @@ class _MapScreenState extends State<MapScreen> {
             onMapCreated: (controller) => _controller = controller,
             myLocationEnabled: true,
             myLocationButtonEnabled: true,
-            zoomGesturesEnabled: true,      // 👈 Pinch zoom
-            scrollGesturesEnabled: true,    // 👈 Pan/drag
-            gestureRecognizers: {           // 👈 Fix gestures
+            zoomGesturesEnabled: true,      
+            scrollGesturesEnabled: true,    
+            gestureRecognizers: {          
               Factory<OneSequenceGestureRecognizer>(() => EagerGestureRecognizer()),
             }.toSet(),
             onLongPress: (LatLng position) => _addMapPositionToFavorites(context, position),

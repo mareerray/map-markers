@@ -15,7 +15,7 @@ class InfoScreen extends StatelessWidget {
           Row(
             children: [
               Icon( Icons.travel_explore, color: Colors.teal, size: 30, ),
-              SizedBox(width: 6), // Spacing between icon and text
+              SizedBox(width: 6), 
               Text(
                 'Map Markers App', 
                 style: GoogleFonts.limelight(fontSize: 28, fontWeight: FontWeight.bold, color: Colors.teal),

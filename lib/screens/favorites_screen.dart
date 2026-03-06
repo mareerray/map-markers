@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
-
 // ========= Favorites Screen =========
 class FavoritesScreen extends StatelessWidget {
   final List<Map<String, dynamic>> favorites;
@@ -40,7 +39,7 @@ class FavoritesScreen extends StatelessWidget {
     }
     
     return ListView.builder(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.fromLTRB(16, 16, 16, 50),
       itemCount: favorites.length,
       itemBuilder: (context, index) {
         final place = favorites[index];
@@ -87,7 +86,7 @@ class FavoritesScreen extends StatelessWidget {
                 ),
               ],
             ),
-            onTap:() => onPlaceTap?.call(place), // Optional tap callback
+            onTap:() => onPlaceTap?.call(place), 
             trailing: IconButton(
               icon: const Icon(Icons.delete, color: Colors.teal, size: 20,),
               onPressed: () {
