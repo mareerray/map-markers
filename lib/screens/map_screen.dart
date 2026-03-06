@@ -1,10 +1,11 @@
-import 'package:flutter/material.dart';
+import 'package:flutter/material.dart' hide SearchBar;
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/gestures.dart';
 import 'package:http/http.dart' as http;
 import 'package:flutter_dotenv/flutter_dotenv.dart';
+import 'search_bar.dart';
 import 'dart:convert';
 import 'dart:async';
 
@@ -247,8 +248,8 @@ class _MapScreenState extends State<MapScreen> {
             TextField(
               controller: nameController,
               decoration: InputDecoration(
-                labelText: 'Custom name (optional)',  // 👈 Changed label
-                hintText: 'Home, Office, Park...',  // 👈 Clearer hint
+                labelText: 'Custom name (optional)',  
+                hintText: 'Home, Office, Park...',  
                 border: OutlineInputBorder(),
                 suffixIcon: nameController.text == autoName && nameController.text.isNotEmpty
                     ? IconButton(
@@ -276,7 +277,7 @@ class _MapScreenState extends State<MapScreen> {
           ElevatedButton(
             onPressed: () async {
               final customName = nameController.text.trim();
-              final finalName = customName.isNotEmpty ? customName : autoName.split(',')[0];  // 👈 Only require custom name
+              final finalName = customName.isNotEmpty ? customName : autoName.split(',')[0]; 
                 final newFavoriteJson = <String, dynamic>{
                   'id': DateTime.now().millisecondsSinceEpoch.toString(),
                   'name': finalName,       // 👈 Custom name
@@ -308,6 +309,9 @@ class _MapScreenState extends State<MapScreen> {
     );
   }
 
+  // ------------ A lifecycle method: It detects if the favorites list has changed 
+  // (e.g., a deletion in another tab) or if a new place was selected to 
+  // trigger marker updates and camera animations -------------
   @override
   void didUpdateWidget(MapScreen oldWidget) {
     super.didUpdateWidget(oldWidget);
@@ -339,77 +343,26 @@ class _MapScreenState extends State<MapScreen> {
               Row(
                 children: [
                   Expanded(
-                    child: TextField(
+                    child: SearchBar(
                       controller: _searchController,
-                      decoration: InputDecoration(
-                        hintText: 'Search places...',
-                        isDense: true,
-                        border: const OutlineInputBorder(),
-                        prefixIcon: const Icon(Icons.search),
-                        suffixIcon: _isSearching
-                            ? const Padding(
-                                padding: EdgeInsets.all(12.0),
-                                child: SizedBox(
-                                  width: 16,
-                                  height: 16,
-                                  child: CircularProgressIndicator(strokeWidth: 2),
-                                ),
-                              )
-                            : (_searchController.text.isNotEmpty
-                                ? IconButton(
-                                    icon: const Icon(Icons.clear),
-                                    onPressed: () {
-                                      _searchController.clear();
-                                      setState(() {
-                                        _suggestions = [];
-                                        _isSearching = false;
-                                      });
-                                      _debounceTimer?.cancel();
-                                    },
-                                  )
-                                : null),
-                      ),
-                      onChanged: (String value) {
-                        _debounceTimer?.cancel();        
-                        _debounceTimer = Timer(const Duration(milliseconds: 300), () {
-                          _fetchSuggestions(value);  // Call search after 300ms pause
-                        });
+                      isSearching: _isSearching,
+                      suggestions: _suggestions.map((s) => '${s.placeId}|${s.description}').toList(),
+                      onChanged: (value) {
+                        _debounceTimer?.cancel();
+                        _debounceTimer = Timer(const Duration(milliseconds: 300), () => _fetchSuggestions(value));
                       },
+                      onSuggestionTap: _goToPlace,
                     ),
                   ),
-                  const SizedBox(width: 8),
-                  FloatingActionButton(
+                  const SizedBox(width: 8),  
+                  FloatingActionButton(     
                     heroTag: 'location',
                     mini: true,
                     onPressed: () => _goToCurrentLocation(context),
                     child: const Icon(Icons.my_location),
                   ),
-                ],
+                ],  
               ),
-              if (_suggestions.isNotEmpty) ...[
-                const SizedBox(height: 8),
-                Container(
-                  height: 200,
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(8),
-                    boxShadow: [
-                      BoxShadow(color: Colors.black26, blurRadius: 4, offset: Offset(0, 2))
-                    ],
-                  ),
-                  child: ListView.builder(
-                    itemCount: _suggestions.length,
-                    itemBuilder: (context, index) {
-                      final suggestion = _suggestions[index];
-                      return ListTile(
-                        leading: const Icon(Icons.place, color: Colors.blue),
-                        title: Text(suggestion.description),
-                        onTap: () => _goToPlace(suggestion.placeId),
-                      );
-                    },
-                  ),
-                ),
-              ],
             ],
           ),
         ),

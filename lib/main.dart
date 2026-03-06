@@ -9,8 +9,8 @@ import 'screens/info_screen.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 void main() async{
-  WidgetsFlutterBinding.ensureInitialized();  // ADD
-  await dotenv.load(fileName: ".env");        // ADD
+  WidgetsFlutterBinding.ensureInitialized();  
+  await dotenv.load(fileName: ".env");        
   runApp(const MyApp());
 }
 
@@ -110,6 +110,7 @@ class _MainTabsState extends State<MainTabs> with TickerProviderStateMixin {
       body: TabBarView(
         controller: _tabController,
         children: [
+          // MAP SCREEN
           MapScreen( 
             favorites: favorites.map((place) => place.toJson()).toList(), // Pass as JSON
             onFavoritesChanged: (updated) {
@@ -124,6 +125,7 @@ class _MainTabsState extends State<MainTabs> with TickerProviderStateMixin {
             },
             selectedFavPlace: _selectedFavPlace,
           ),
+          // FAVORITES SCREEN
           FavoritesScreen(
             favorites: favorites.map((place) => place.toJson()).toList(), 
             onFavoritesChanged: (List<Map<String, dynamic>> updatedFavorites) {
@@ -138,6 +140,7 @@ class _MainTabsState extends State<MainTabs> with TickerProviderStateMixin {
               _tabController.animateTo(0); // Switch to Map tab
             },
           ),
+          // INFO SCREEN
           const InfoScreen(),
         ],
       ),

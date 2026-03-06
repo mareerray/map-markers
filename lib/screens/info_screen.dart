@@ -25,24 +25,24 @@ class InfoScreen extends StatelessWidget {
           SizedBox(height: 24),
           Text(
             'Developer: Mayuree Reunsati',
-            style: GoogleFonts.poppins(fontSize: 20, fontWeight: FontWeight.w500),
+            style: GoogleFonts.poppins(fontSize: 18, fontWeight: FontWeight.w500),
           ),
           SizedBox(height: 8),
           Text(
             'Email: mayuree.reunsati@gritlab.ax',
-            style: GoogleFonts.poppins(fontSize: 16, color: Colors.grey),
+            style: GoogleFonts.poppins(fontSize: 14, color: Colors.grey),
           ),
           SizedBox(height: 16),
           Text(
             'Year: 2026',
-            style: GoogleFonts.poppins(fontSize: 16),
+            style: GoogleFonts.poppins(fontSize: 14),
           ),
           SizedBox(height: 32),
           Text(
             'Built for Travel Tech Startup\n'
             'Save & discover your favorite places!',
             textAlign: TextAlign.center,
-            style: GoogleFonts.poppins(fontSize: 16, height: 1.5, color: Colors.teal[700]),
+            style: GoogleFonts.poppins(fontSize: 14, height: 1.5, color: Colors.teal[700]),
           ),
           SizedBox(height: 16),
           Icon(Icons.map, size: 70, color: Colors.teal),
