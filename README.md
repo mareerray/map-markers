@@ -74,6 +74,7 @@ map_markers/
 ├── lib/
 │   ├── main.dart
 │   ├── screens/
+│   │   ├── search_bar.dart
 │   │   ├── map_screen.dart
 │   │   ├── favorite_screen.dart
 │   │   └── info_screen.dart
