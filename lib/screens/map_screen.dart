@@ -1,19 +1,24 @@
 import 'package:flutter/material.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:geolocator/geolocator.dart';
+import 'package:flutter/foundation.dart';
+import 'package:flutter/gestures.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
+import 'dart:async';
 
 class MapScreen extends StatefulWidget {
   final List<Map<String, dynamic>> favorites;
   final Function(List<Map<String, dynamic>>) onFavoritesChanged;
   final Map<String, dynamic>? selectedFavPlace;
+  final VoidCallback? onSwitchToFavorites;
 
   const MapScreen({
     super.key,
     required this.favorites,
     required this.onFavoritesChanged,
     this.selectedFavPlace,
+    this.onSwitchToFavorites,
   });
 
   @override
@@ -33,15 +38,16 @@ class _MapScreenState extends State<MapScreen> {
   Set<Marker> markers = {};
   List<_PlaceSuggestion> _suggestions = [];
   bool _isSearching = false;
-  Position? _currentPosition;
+  Position? currentPosition;
+  Timer? _debounceTimer;
 
   static const CameraPosition _kGooglePlex = CameraPosition(
     target: LatLng(60.0971, 19.9340),
-    zoom: 12.0,
+    zoom: 12.0, // 👈 Change: 12=overview, 15=city, 18=street, 20=building
   );
 
   // ✨✨✨✨🔑 Replace later 🔑✨✨✨✨✨
-  static const String _googleApiKey = 'mykey';
+  static const String _googleApiKey = 'my_api_key';
 
   @override
   void initState() {
@@ -56,16 +62,18 @@ class _MapScreenState extends State<MapScreen> {
 
   void _focusOnFavorite(Map<String, dynamic> place) {
     _controller.animateCamera( 
-      CameraUpdate.newLatLngZoom(LatLng(place['lat'], place['lng']), 15),
+      CameraUpdate.newLatLngZoom(LatLng(place['lat'], place['lng']), 16),
     );
   } 
 
   void _updateMarkers() {
+      final defaultIcon = BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueRose);
     markers = widget.favorites.map((place) => Marker(
       markerId: MarkerId(place['id']),
       position: LatLng(place['lat'], place['lng']),
+      icon: defaultIcon,
       infoWindow: InfoWindow(
-        title: place['name'],
+        title: '★ ${place['name']}',
         onTap: () => _showPlaceDialog(place),
       ),
     )).toSet();
@@ -77,7 +85,15 @@ class _MapScreenState extends State<MapScreen> {
       context: context,
       builder: (context) => AlertDialog(
         title: Text(place['name']),
-        content: Text('Lat: ${place['lat']}\nLng: ${place['lng']}'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(place['address']),
+            const SizedBox(height: 12),
+            Text('Lat: ${place['lat'].toStringAsFixed(4)}\nLng: ${place['lng'].toStringAsFixed(4)}'),
+          ],
+        ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
@@ -88,26 +104,26 @@ class _MapScreenState extends State<MapScreen> {
     );
   }
 
-  Future<void> _fetchSuggestions(String input) async {
-    if (input.length < 2) {
+  Future<void> _fetchSuggestions(String query) async {
+    if (query.isEmpty) {
+      setState(() {
+        _suggestions = [];
+        _isSearching = false; // no search if empty
+      });
+      return;
+    }
+
+    if (query.length < 2) {
       setState(() => _suggestions = []);
       return;
     }
 
     setState(() => _isSearching = true);
 
-    // Use current location or fallback to Mariehamn
-    final lat = _currentPosition?.latitude ?? 60.0971;
-    final lng = _currentPosition?.longitude ?? 19.9340;
-
     final url = Uri.https('maps.googleapis.com', '/maps/api/place/autocomplete/json', {
-      'input': input,
+      'input': query,
       'key': _googleApiKey,
-      // 'types': 'establishment|address|geocode',  // Local shops + addresses
-      'location': '$lat,$lng',
-      'radius': '60000',  // 60km around you/Mariehamn
-      'strictbounds': 'false',
-      'language': 'sv',
+      'language': 'en',
     });
 
     try {
@@ -121,15 +137,18 @@ class _MapScreenState extends State<MapScreen> {
               placeId: p['place_id'] as String,
               description: p['description'] as String,
             )).toList();
+            _isSearching = false;
           });
         } 
       }
+      // If bad status, stop spinner
+      setState(() => _isSearching = false);
     } catch (e) {
       setState(() => _isSearching = false);
     }
   }
 
-Future<void> _goToPlace(String placeId) async {
+  Future<void> _goToPlace(String placeId) async {
     final url = Uri.https('maps.googleapis.com', '/maps/api/place/details/json', {
       'place_id': placeId,
       'key': _googleApiKey,
@@ -173,7 +192,7 @@ Future<void> _goToPlace(String placeId) async {
 
     if (permission == LocationPermission.whileInUse || permission == LocationPermission.always) {
       Position position = await Geolocator.getCurrentPosition();
-      _currentPosition = position;
+      currentPosition = position;
       setState(() {}); // Update state to show current location if needed
       _controller.animateCamera(
         CameraUpdate.newLatLngZoom(LatLng(position.latitude, position.longitude), 15),
@@ -181,7 +200,7 @@ Future<void> _goToPlace(String placeId) async {
     }
   }
 
-  Future<void> _addMapPositionToFavorites(LatLng position) async {
+  Future<void> _addMapPositionToFavorites(BuildContext context, LatLng position) async {
     // 1. Get address from lat/lng (reverse geocoding)
     final url = Uri.https('maps.googleapis.com', '/maps/api/geocode/json', {
       'latlng': '${position.latitude},${position.longitude}',
@@ -203,6 +222,7 @@ Future<void> _goToPlace(String placeId) async {
 
     // 2. Show dialog with auto-filled name
     final nameController = TextEditingController(text: autoName);
+
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
@@ -211,14 +231,19 @@ Future<void> _goToPlace(String placeId) async {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Text('Location: $autoName', style: const TextStyle(fontWeight: FontWeight.bold)),  // 👈 "Location"
             const SizedBox(height: 12),
             TextField(
               controller: nameController,
               decoration: InputDecoration(
                 labelText: 'Custom name (optional)',  // 👈 Changed label
-                hintText: 'Home, Office, Park... (leave empty to use address)',  // 👈 Clearer hint
+                hintText: 'Home, Office, Park...',  // 👈 Clearer hint
                 border: OutlineInputBorder(),
+                suffixIcon: nameController.text == autoName && nameController.text.isNotEmpty
+                    ? IconButton(
+                        icon: const Icon(Icons.close, size: 18),
+                        onPressed: () => nameController.clear(),
+                      )
+                    : null,
               ),
             ),
             const SizedBox(height: 8),
@@ -237,23 +262,30 @@ Future<void> _goToPlace(String placeId) async {
             child: const Text('Cancel'),
           ),
           ElevatedButton(
-            onPressed: () {
+            onPressed: () async {
               final customName = nameController.text.trim();
-              // 👈 ALWAYS SAVE - even if empty!
               final finalName = customName.isNotEmpty ? customName : autoName.split(',')[0];  // 👈 Only require custom name
-                final newFavorite = {
+                final newFavoriteJson = <String, dynamic>{
                   'id': DateTime.now().millisecondsSinceEpoch.toString(),
                   'name': finalName,       // 👈 Custom name
                   'address': autoName,      // 👈 Real address (always saved)
                   'lat': position.latitude,
                   'lng': position.longitude,
                 };
-                final updated = [...widget.favorites, newFavorite];
-                widget.onFavoritesChanged(updated);
+
+                final updated = [...widget.favorites, newFavoriteJson];
+                widget.onFavoritesChanged(updated);  // Triggers parent's _saveFavorites    
                 _updateMarkers();
                 Navigator.pop(context);
                 ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(content: Text('$finalName saved to favorites!')),
+                  SnackBar(content: Text('$finalName saved to favorites!'),
+                  duration: Duration(seconds: 2),
+                  action: SnackBarAction(
+                    label: 'View',
+                    onPressed: () => widget.onSwitchToFavorites?.call(),
+                    textColor: Colors.white,
+                  ),
+                  ),
                 );
               },
             child: const Text('Save'),
@@ -267,12 +299,19 @@ Future<void> _goToPlace(String placeId) async {
   void didUpdateWidget(MapScreen oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.favorites != widget.favorites || 
-        oldWidget.selectedFavPlace != widget.selectedFavPlace) {  // 👈 ALSO CHECK PLACE
+        oldWidget.selectedFavPlace != widget.selectedFavPlace) {  
       _updateMarkers();
       if (widget.selectedFavPlace != null) {
         _focusOnFavorite(widget.selectedFavPlace!);
       }
     }
+  }
+
+  @override
+  void dispose() {
+    _debounceTimer?.cancel();
+    _searchController.dispose();
+    super.dispose();
   }
 
   @override
@@ -290,6 +329,7 @@ Future<void> _goToPlace(String placeId) async {
                       controller: _searchController,
                       decoration: InputDecoration(
                         hintText: 'Search places...',
+                        isDense: true,
                         border: const OutlineInputBorder(),
                         prefixIcon: const Icon(Icons.search),
                         suffixIcon: _isSearching
@@ -306,12 +346,22 @@ Future<void> _goToPlace(String placeId) async {
                                     icon: const Icon(Icons.clear),
                                     onPressed: () {
                                       _searchController.clear();
-                                      setState(() => _suggestions = []);
+                                      setState(() {
+                                        _suggestions = [];
+                                        _isSearching = false;
+                                      });
+                                      _debounceTimer?.cancel();
                                     },
                                   )
                                 : null),
                       ),
-                      onChanged: _fetchSuggestions,
+                      onChanged: (String value) {
+                        _debounceTimer?.cancel();  // Cancel previous timer if typing continues
+                        
+                        _debounceTimer = Timer(const Duration(milliseconds: 300), () {
+                          _fetchSuggestions(value);  // Call search after 300ms pause
+                        });
+                      },
                     ),
                   ),
                   const SizedBox(width: 8),
@@ -357,7 +407,12 @@ Future<void> _goToPlace(String placeId) async {
             onMapCreated: (controller) => _controller = controller,
             myLocationEnabled: true,
             myLocationButtonEnabled: true,
-            onLongPress: _addMapPositionToFavorites,
+            zoomGesturesEnabled: true,      // 👈 Pinch zoom
+            scrollGesturesEnabled: true,    // 👈 Pan/drag
+            gestureRecognizers: {           // 👈 Fix gestures
+              Factory<OneSequenceGestureRecognizer>(() => EagerGestureRecognizer()),
+            }.toSet(),
+            onLongPress: (LatLng position) => _addMapPositionToFavorites(context, position),
           ),
         ),
       ],

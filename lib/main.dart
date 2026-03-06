@@ -54,43 +54,57 @@ class _MainTabsState extends State<MainTabs> with TickerProviderStateMixin {
 
   Future<void> _loadFavorites() async {
     final prefs = await SharedPreferences.getInstance();
-    final jsonString = prefs.getString('favorites');
-    if (jsonString != null) {
+    final List<String>? jsonList = prefs.getStringList('favorites');  // 👈 List!
+    if (jsonList != null && jsonList.isNotEmpty) {
       setState(() {
-        final jsonList = jsonDecode(jsonString) as List;
-        favorites = jsonList.map((json) => FavoritePlace.fromJson(json)).toList();
-      });  
+        favorites = jsonList.map((jsonStr) => FavoritePlace.fromJson(jsonDecode(jsonStr))).toList();
+      });
     }
   }
 
   Future<void> _saveFavorites(List<FavoritePlace> newFavorites) async {
     final prefs = await SharedPreferences.getInstance();
-    await prefs.setString('favorites', json.encode(newFavorites.map((x) => x.toJson())));
-    setState(() => favorites = newFavorites);
+    final jsonList = newFavorites.map((x) => jsonEncode(x.toJson())).toList();
+    await prefs.setStringList('favorites', jsonList);  // 👈 List of JSON strings!
+    if (mounted) {
+      setState(() => favorites = newFavorites);
+    }
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text('Map Markers',
-          style: GoogleFonts.poppins(fontSize: 24, fontWeight: FontWeight.bold, color: Colors.white),
+        title: Padding(
+          padding: const EdgeInsets.only(top: 15.0), // Adjust vertical padding as needed
+          child: Row(
+            children: [ 
+              Icon( Icons.travel_explore, color: Colors.white, size: 30, ),
+              SizedBox(width: 6), // Spacing between icon and text
+              Text('Map Markers',
+                style: GoogleFonts.limelight(fontSize: 30, fontWeight: FontWeight.bold, color: Colors.white),
+              ),
+            ],
+          ),
         ),
         backgroundColor: Colors.teal,
-        bottom: TabBar(
-          controller: _tabController,
-          labelColor: Colors.white,
-          labelStyle: GoogleFonts.poppins(fontSize: 14, fontWeight: FontWeight.w600),
-          unselectedLabelColor: Colors.white.withValues(alpha:0.8),
-          indicatorColor: Colors.white,
-          tabs: const [
-            Tab(icon: Icon(Icons.map), 
-              text: 'Map'),
-            Tab(icon: Icon(Icons.favorite), 
-              text: 'Favorites'),
-            Tab(icon: Icon(Icons.info), 
-              text: 'Info'),
-          ],
+        bottom: PreferredSize(
+          preferredSize: const Size.fromHeight(70.0),
+          child: TabBar(
+            controller: _tabController,
+            labelColor: Colors.white,
+            labelStyle: GoogleFonts.poppins(fontSize: 14, fontWeight: FontWeight.w600),
+            unselectedLabelColor: Colors.white.withValues(alpha:0.6),
+            indicatorColor: Colors.white,
+            tabs: const [
+              Tab(icon: Icon(Icons.map), 
+                text: 'Map'),
+              Tab(icon: Icon(Icons.favorite), 
+                text: 'Favorites'),
+              Tab(icon: Icon(Icons.info), 
+                text: 'Info'),
+            ],
+          ),
         ),
       ),
       body: TabBarView(
@@ -104,6 +118,9 @@ class _MainTabsState extends State<MainTabs> with TickerProviderStateMixin {
                 favorites = favoritesList;  // Update state variable
               });
               _saveFavorites(favoritesList);
+            },
+            onSwitchToFavorites: () {
+              _tabController.animateTo(1);
             },
             selectedFavPlace: _selectedFavPlace,
           ),
@@ -119,7 +136,6 @@ class _MainTabsState extends State<MainTabs> with TickerProviderStateMixin {
             onPlaceTap: (Map<String, dynamic> favoritePlace) {
               setState(() => _selectedFavPlace = favoritePlace);
               _tabController.animateTo(0); // Switch to Map tab
-              // Optionally, you could implement functionality to jump to this location on the map
             },
           ),
           const InfoScreen(),

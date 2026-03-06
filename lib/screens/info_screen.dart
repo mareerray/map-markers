@@ -12,9 +12,15 @@ class InfoScreen extends StatelessWidget {
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Text(
-            'Map Markers App', 
-            style: GoogleFonts.poppins(fontSize: 28, fontWeight: FontWeight.bold, color: Colors.teal),
+          Row(
+            children: [
+              Icon( Icons.travel_explore, color: Colors.teal, size: 30, ),
+              SizedBox(width: 6), // Spacing between icon and text
+              Text(
+                'Map Markers App', 
+                style: GoogleFonts.limelight(fontSize: 28, fontWeight: FontWeight.bold, color: Colors.teal),
+              ),
+            ],
           ),
           SizedBox(height: 24),
           Text(
@@ -39,7 +45,7 @@ class InfoScreen extends StatelessWidget {
             style: GoogleFonts.poppins(fontSize: 16, height: 1.5, color: Colors.teal[700]),
           ),
           SizedBox(height: 16),
-          Icon(Icons.map, size: 80, color: Colors.teal),
+          Icon(Icons.map, size: 70, color: Colors.teal),
         ],
       ),
     );

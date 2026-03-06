@@ -89,7 +89,7 @@ class FavoritesScreen extends StatelessWidget {
             ),
             onTap:() => onPlaceTap?.call(place), // Optional tap callback
             trailing: IconButton(
-              icon: const Icon(Icons.delete, color: Colors.red),
+              icon: const Icon(Icons.delete, color: Colors.teal, size: 20,),
               onPressed: () {
                 final updated = List<Map<String, dynamic>>.from(favorites);
                 updated.removeAt(index);
