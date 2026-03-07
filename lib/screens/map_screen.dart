@@ -56,6 +56,7 @@ class _MapScreenState extends State<MapScreen> {
   void initState() {
     super.initState();
     apiKey = dotenv.env['GOOGLE_MAP_API_KEY'] ?? '';
+    assert(apiKey.isNotEmpty, 'GOOGLE_MAP_API_KEY is missing');
     _initializeMap();
   }
 
@@ -214,22 +215,25 @@ class _MapScreenState extends State<MapScreen> {
 
   Future<void> _addMapPositionToFavorites(BuildContext context, LatLng position) async {
     // 1. Get address from lat/lng (reverse geocoding)
-    final url = Uri.https('maps.googleapis.com', '/maps/api/geocode/json', {
-      'latlng': '${position.latitude},${position.longitude}',
-      'key': apiKey,
-    });
-
     String autoName = 'Unnamed place';
+    
     try {
+      final url = Uri.https('maps.googleapis.com', '/maps/api/geocode/json', {
+        'latlng': '${position.latitude},${position.longitude}',
+        'key': apiKey,
+      });
+      
       final response = await http.get(url);
+      
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body) as Map<String, dynamic>;
         if (data['status'] == 'OK' && data['results'].isNotEmpty) {
           autoName = data['results'][0]['formatted_address'] as String;
-        }
+          //print('📍 GOT: $autoName');  // 👈 debugging
+        } 
       }
     } catch (e) {
-      //print('Geocode failed: $e');
+      //print('🚨 REAL Geocode ERROR: $e');  
     }
 
     // 2. Show dialog with auto-filled name
@@ -367,18 +371,23 @@ class _MapScreenState extends State<MapScreen> {
           ),
         ),
         Expanded(
-          child: GoogleMap(
-            initialCameraPosition: _kGooglePlex,
-            markers: markers,
-            onMapCreated: (controller) => _controller = controller,
-            myLocationEnabled: true,
-            myLocationButtonEnabled: true,
-            zoomGesturesEnabled: true,      
-            scrollGesturesEnabled: true,    
-            gestureRecognizers: {          
-              Factory<OneSequenceGestureRecognizer>(() => EagerGestureRecognizer()),
-            }.toSet(),
-            onLongPress: (LatLng position) => _addMapPositionToFavorites(context, position),
+          child: SafeArea(
+            child: Padding(
+              padding: const EdgeInsets.only(bottom:0),
+              child: GoogleMap(
+                initialCameraPosition: _kGooglePlex,
+                markers: markers,
+                onMapCreated: (controller) => _controller = controller,
+                myLocationEnabled: true,
+                myLocationButtonEnabled: true,
+                zoomGesturesEnabled: true,      
+                scrollGesturesEnabled: true,    
+                gestureRecognizers: {          
+                  Factory<OneSequenceGestureRecognizer>(() => EagerGestureRecognizer()),
+                }.toSet(),
+                onLongPress: (LatLng position) => _addMapPositionToFavorites(context, position),
+              ),
+            ),
           ),
         ),
       ],
