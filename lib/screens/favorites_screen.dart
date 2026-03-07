@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 // ========= Favorites Screen =========
+
 class FavoritesScreen extends StatelessWidget {
   final List<Map<String, dynamic>> favorites;
   final Function(List<Map<String, dynamic>>) onFavoritesChanged; 

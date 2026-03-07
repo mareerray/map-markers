@@ -17,7 +17,6 @@ void main() async{
 class MyApp extends StatelessWidget {
   const MyApp({super.key});
 
-  // This widget is the root of your application.
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
@@ -42,7 +41,7 @@ class MainTabs extends StatefulWidget {
 
 class _MainTabsState extends State<MainTabs> with TickerProviderStateMixin {
   late TabController _tabController;
-  List<FavoritePlace> favorites = [];  // Shared favorites
+  List<FavoritePlace> favorites = [];  
   Map<String, dynamic>? _selectedFavPlace;
 
   @override
@@ -54,7 +53,7 @@ class _MainTabsState extends State<MainTabs> with TickerProviderStateMixin {
 
   Future<void> _loadFavorites() async {
     final prefs = await SharedPreferences.getInstance();
-    final List<String>? jsonList = prefs.getStringList('favorites');  // 👈 List!
+    final List<String>? jsonList = prefs.getStringList('favorites');  
     if (jsonList != null && jsonList.isNotEmpty) {
       setState(() {
         favorites = jsonList.map((jsonStr) => FavoritePlace.fromJson(jsonDecode(jsonStr))).toList();
@@ -65,7 +64,7 @@ class _MainTabsState extends State<MainTabs> with TickerProviderStateMixin {
   Future<void> _saveFavorites(List<FavoritePlace> newFavorites) async {
     final prefs = await SharedPreferences.getInstance();
     final jsonList = newFavorites.map((x) => jsonEncode(x.toJson())).toList();
-    await prefs.setStringList('favorites', jsonList);  // 👈 List of JSON strings!
+    await prefs.setStringList('favorites', jsonList);  
     if (mounted) {
       setState(() => favorites = newFavorites);
     }
@@ -76,11 +75,11 @@ class _MainTabsState extends State<MainTabs> with TickerProviderStateMixin {
     return Scaffold(
       appBar: AppBar(
         title: Padding(
-          padding: const EdgeInsets.only(top: 15.0), // Adjust vertical padding as needed
+          padding: const EdgeInsets.only(top: 15.0),
           child: Row(
             children: [ 
               Icon( Icons.travel_explore, color: Colors.white, size: 30, ),
-              SizedBox(width: 6), // Spacing between icon and text
+              SizedBox(width: 6), 
               Text('Map Markers',
                 style: GoogleFonts.limelight(fontSize: 30, fontWeight: FontWeight.bold, color: Colors.white),
               ),
@@ -112,11 +111,11 @@ class _MainTabsState extends State<MainTabs> with TickerProviderStateMixin {
         children: [
           // MAP SCREEN
           MapScreen( 
-            favorites: favorites.map((place) => place.toJson()).toList(), // Pass as JSON
+            favorites: favorites.map((place) => place.toJson()).toList(), 
             onFavoritesChanged: (updated) {
               final favoritesList = updated.map((json) => FavoritePlace.fromJson(json)).toList();
               setState(() {  
-                favorites = favoritesList;  // Update state variable
+                favorites = favoritesList;  
               });
               _saveFavorites(favoritesList);
             },
@@ -131,13 +130,13 @@ class _MainTabsState extends State<MainTabs> with TickerProviderStateMixin {
             onFavoritesChanged: (List<Map<String, dynamic>> updatedFavorites) {
               final favoritesList = updatedFavorites.map((json) => FavoritePlace.fromJson(json)).toList();
               setState(() { 
-                favorites = favoritesList;  // Update state variable
+                favorites = favoritesList;  
               });
               _saveFavorites(favoritesList);
             },
             onPlaceTap: (Map<String, dynamic> favoritePlace) {
               setState(() => _selectedFavPlace = favoritePlace);
-              _tabController.animateTo(0); // Switch to Map tab
+              _tabController.animateTo(0); 
             },
           ),
           // INFO SCREEN

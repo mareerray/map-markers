@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 // ========= Info Screen - static info about the app and developer ========
+
 class InfoScreen extends StatelessWidget {
   const InfoScreen({super.key});
 

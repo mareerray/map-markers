@@ -9,6 +9,8 @@ import 'search_bar.dart';
 import 'dart:convert';
 import 'dart:async';
 
+// ========= Map Screen =========
+
 class MapScreen extends StatefulWidget {
   final List<Map<String, dynamic>> favorites;
   final Function(List<Map<String, dynamic>>) onFavoritesChanged;
@@ -44,12 +46,13 @@ class _MapScreenState extends State<MapScreen> {
   List<_PlaceSuggestion> _suggestions = [];
   bool _isSearching = false;
   Position? currentPosition;
+  bool _savingNewMarker = false;
   Timer? _debounceTimer;
   String apiKey = '';
 
   static const CameraPosition _kGooglePlex = CameraPosition(
     target: LatLng(60.0971, 19.9340),
-    zoom: 12.0, // 👈 Change: 12=overview, 15=city, 18=street, 20=building
+    zoom: 12.0, // 12=overview, 15=city, 18=street, 20=building
   );
 
   @override
@@ -61,8 +64,7 @@ class _MapScreenState extends State<MapScreen> {
   }
 
   Future<void> _initializeMap() async {
-    await _updateMarkers(); // Load markers first
-    // ONE callback does it all - after screen is drawn
+    await _updateMarkers(); 
     if(mounted) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (widget.selectedFavPlace != null) {
@@ -120,7 +122,7 @@ class _MapScreenState extends State<MapScreen> {
     if (query.isEmpty) {
       setState(() {
         _suggestions = [];
-        _isSearching = false; // no search if empty
+        _isSearching = false;
       });
       return;
     }
@@ -153,7 +155,6 @@ class _MapScreenState extends State<MapScreen> {
           });
         } 
       }
-      // If bad status, stop spinner
       setState(() => _isSearching = false);
     } catch (e) {
       setState(() => _isSearching = false);
@@ -206,7 +207,7 @@ class _MapScreenState extends State<MapScreen> {
     if (permission == LocationPermission.whileInUse || permission == LocationPermission.always) {
       Position position = await Geolocator.getCurrentPosition();
       currentPosition = position;
-      setState(() {}); // Update state to show current location if needed
+      setState(() {}); 
       _controller.animateCamera(
         CameraUpdate.newLatLngZoom(LatLng(position.latitude, position.longitude), 15),
       );
@@ -265,7 +266,7 @@ class _MapScreenState extends State<MapScreen> {
             ),
             const SizedBox(height: 8),
             Text(
-              'Address: $autoName',  // 👈 Confirm address saved
+              'Address: $autoName',  
               style: TextStyle(fontSize: 12, color: Colors.green[600], fontStyle: FontStyle.italic),
             ),
             const SizedBox(height: 8),
@@ -282,30 +283,49 @@ class _MapScreenState extends State<MapScreen> {
             onPressed: () async {
               final customName = nameController.text.trim();
               final finalName = customName.isNotEmpty ? customName : autoName.split(',')[0]; 
-                final newFavoriteJson = <String, dynamic>{
-                  'id': DateTime.now().millisecondsSinceEpoch.toString(),
-                  'name': finalName,       // 👈 Custom name
-                  'address': autoName,      // 👈 Real address (always saved)
-                  'lat': position.latitude,
-                  'lng': position.longitude,
-                };
 
-                final updated = [...widget.favorites, newFavoriteJson];
-                widget.onFavoritesChanged(updated);  // Triggers parent's _saveFavorites    
-                _updateMarkers();
-                Navigator.pop(dialogContext);
-                if (!context.mounted) return;
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(content: Text('$finalName saved to favorites!'),
-                  duration: Duration(seconds: 2),
-                  action: SnackBarAction(
-                    label: 'View',
-                    onPressed: () => widget.onSwitchToFavorites?.call(),
-                    textColor: Colors.white,
-                  ),
-                  ),
-                );
-              },
+              final newFavoriteJson = <String, dynamic>{
+                'id': DateTime.now().millisecondsSinceEpoch.toString(),
+                'name': finalName,       // Custom name
+                'address': autoName,      // Real address (always saved)
+                'lat': position.latitude,
+                'lng': position.longitude,
+              };
+
+              final updated = [...widget.favorites, newFavoriteJson];
+
+              // 1. Save + camera FIRST
+              widget.onFavoritesChanged(updated);   
+              await _controller.animateCamera(
+                CameraUpdate.newLatLngZoom(
+                  LatLng(position.latitude, position.longitude), 
+                  16.0  // 👈 Nice close zoom
+                ),
+              );
+
+              // 👈 Block old focus + update
+              _savingNewMarker = true;
+              setState(() {}); // Triggers didUpdateWidget to skip old focus         
+              _updateMarkers();
+
+              // 👈 Reset flag
+              Timer(Duration(milliseconds: 200), () => _savingNewMarker = false);
+
+              // ignore: use_build_context_synchronously
+              Navigator.pop(dialogContext);
+
+              if (!context.mounted) return;
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(content: Text('$finalName saved to favorites!'),
+                duration: Duration(seconds: 2),
+                action: SnackBarAction(
+                  label: 'View',
+                  onPressed: () => widget.onSwitchToFavorites?.call(),
+                  textColor: Colors.white,
+                ),
+                ),
+              );
+            },
             child: const Text('Save'),
           ),
         ],
@@ -322,7 +342,7 @@ class _MapScreenState extends State<MapScreen> {
     if (oldWidget.favorites != widget.favorites || 
         oldWidget.selectedFavPlace != widget.selectedFavPlace) {  
       _updateMarkers();
-      if (widget.selectedFavPlace != null) {
+      if (widget.selectedFavPlace != null && !_savingNewMarker) {
         _focusOnFavorite(widget.selectedFavPlace!);
       }
     }
